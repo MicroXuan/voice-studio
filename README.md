@@ -1,12 +1,14 @@
 # 声屿 Voice Studio
 
-一个本地运行的中文文本转语音工作台。粘贴最长 20,000 字的文本，选择云健、云希、云夏、云扬或晓晓，调整语速、音调和音量，即可试听并下载 MP3。
+一个本地运行的中文文本转语音工作台。粘贴最长 20,000 字的文本，选择云健、云希、云夏、云扬、云泽或晓晓，调整语速、音调和音量，即可试听并下载 MP3。
 
 ## 运行要求
 
 - Python 3.11 或更高版本
 - 可访问 Microsoft Edge 在线语音服务的网络连接
 - Chrome、Edge、Safari 或 Firefox 的近期版本
+
+云泽使用 Azure Speech，需要额外配置 Azure Speech 资源的 Key 和 Region；其他五个声音仍使用 Edge TTS，不需要 Azure Key。
 
 `edge-tts` 是第三方开源客户端，调用的是 Microsoft Edge 在线语音服务，并不是可离线部署的微软开源语音模型。接口可用性与使用政策可能变化；本项目当前定位为个人本地工具。
 
@@ -35,10 +37,31 @@ http://127.0.0.1:8000
 
 停止服务时，在终端按 `Ctrl+C`。
 
+## 配置 Azure 云泽
+
+只有使用云泽时才需要配置 Azure。先复制本地配置模板：
+
+```bash
+cp .env.example .env
+```
+
+打开 `.env`，只在自己的电脑上填写 Azure Speech 的 Key：
+
+```dotenv
+AZURE_SPEECH_KEY=在这里填写你的Key
+AZURE_SPEECH_REGION=eastasia
+```
+
+保存后重启 Uvicorn，再刷新网页。云泽卡片从“需配置 Azure Speech”变为可选择，即表示配置已读取。
+
+`.env` 已被 Git 忽略。不要提交、分享、截图或把 Key 放进网页代码；如果 Key 曾经暴露，请立即在 Azure 门户的“密钥和终结点”页面重新生成该密钥。
+
+创建 Speech 资源时可选择 `Free F0` 免费层。免费额度和服务限制以 Azure 门户当前显示为准；本项目不会绕过额度，也不会替你控制 Azure 订阅中的其他付费资源。
+
 ## 使用方法
 
 1. 粘贴需要配音的中文文本。
-2. 选择云健、云希、云夏、云扬或晓晓。
+2. 选择云健、云希、云夏、云扬、云泽或晓晓。未配置 Azure 时，云泽会显示为不可用。
 3. 按需调整语速、音调和音量。
 4. 点击“生成语音”，等待进度到达 100%。
 5. 在页面中试听，或点击“下载 MP3”。
@@ -76,9 +99,13 @@ uvicorn app.main:app --reload --port 8001
 
 检查磁盘剩余空间，以及系统临时目录是否可写。清理磁盘空间后重新生成。
 
-### 为什么没有云泽
+### 云泽显示“需配置 Azure Speech”
 
-截至当前测试使用的 `edge-tts 7.2.8`，Microsoft Edge 免费在线语音清单不提供 `zh-CN-YunzeNeural`，因此本项目选用可实际生成的云扬作为第二个男声。Azure AI Speech 官方服务可提供不同的语音清单；如果必须使用云泽，需要另行接入 Azure 账号与密钥。
+确认项目根目录存在 `.env`，其中同时填写了 `AZURE_SPEECH_KEY` 和 `AZURE_SPEECH_REGION=eastasia`，然后完整停止并重新启动 Uvicorn。只配置其中一项时，云泽仍会保持禁用。
+
+### 云泽提示 Azure 配置无效
+
+确认 Key 来自当前 Speech 资源，Region 与资源页面的“位置/区域”一致。当前资源位于 East Asia，因此 Region 应为 `eastasia`。不要把 Key 粘贴到聊天或问题截图中。
 
 ### 能否公开部署
 
