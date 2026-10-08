@@ -199,3 +199,34 @@ async def test_mobile_text_action_prevents_label_wrap(
 
     assert "white-space: nowrap" in text_action_rule
     assert "flex-shrink: 0" in text_action_rule
+
+
+@pytest.mark.asyncio
+async def test_voice_cards_preserve_availability_provider_and_first_selection(
+    api_harness: ApiHarness,
+) -> None:
+    script = (await api_harness.client.get("/static/app.js")).text
+
+    assert "radio.disabled = !voice.available" in script
+    assert "radio.dataset.available = String(voice.available)" in script
+    assert "radio.dataset.provider = voice.provider" in script
+    assert "voice.available && !firstAvailableSelected" in script
+    assert "voice.unavailable_reason" in script
+    assert 'provider.textContent = "Azure"' in script
+
+
+@pytest.mark.asyncio
+async def test_busy_state_does_not_reenable_unavailable_voice_and_pitch_unit_matches_provider(
+    api_harness: ApiHarness,
+) -> None:
+    script = (await api_harness.client.get("/static/app.js")).text
+
+    assert 'control.dataset.available === "false"' in script
+    assert 'selectedVoice?.dataset.provider === "azure" ? "%" : "Hz"' in script
+    assert "updateControlLabels();" in script.split(
+        'elements.voiceList.addEventListener("change"', 1
+    )[1]
+
+    css = (await api_harness.client.get("/static/styles.css")).text
+    assert ".voice-choice.is-unavailable" in css
+    assert ".voice-provider" in css

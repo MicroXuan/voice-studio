@@ -429,6 +429,18 @@ h2 {
   border-color: rgba(31, 111, 235, 0.5);
 }
 
+.voice-choice.is-unavailable {
+  color: var(--muted);
+  background: var(--paper);
+  cursor: not-allowed;
+  opacity: 0.78;
+}
+
+.voice-choice.is-unavailable:hover {
+  transform: none;
+  border-color: var(--line);
+}
+
 .voice-choice:has(input:checked) {
   border-color: var(--signal);
   background: rgba(31, 111, 235, 0.055);
@@ -450,6 +462,23 @@ h2 {
   gap: 3px;
 }
 
+.voice-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.voice-provider {
+  padding: 2px 6px;
+  border: 1px solid rgba(31, 111, 235, 0.3);
+  border-radius: 999px;
+  color: var(--signal);
+  background: rgba(31, 111, 235, 0.06);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .voice-copy strong {
   font-size: 14px;
 }
@@ -458,6 +487,11 @@ h2 {
   color: var(--muted);
   font-size: 11px;
   line-height: 1.45;
+}
+
+.voice-copy .voice-unavailable-reason {
+  color: #8A4A37;
+  font-weight: 700;
 }
 
 .radio-indicator {

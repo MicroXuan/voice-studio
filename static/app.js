@@ -37,6 +37,7 @@ async function loadVoices() {
     }
     const voices = await response.json();
     renderVoiceChoices(voices);
+    updateControlLabels();
     updateSubmitState();
   } catch (error) {
     elements.voiceList.querySelector(".voice-loading").innerHTML =
@@ -50,24 +51,47 @@ function renderVoiceChoices(voices) {
   elements.voiceList.replaceChildren(legend);
   const choices = document.createElement("div");
   choices.className = "voice-choices";
+  let firstAvailableSelected = false;
 
-  voices.forEach((voice, index) => {
+  voices.forEach((voice) => {
     const label = document.createElement("label");
     label.className = "voice-choice";
+    label.classList.toggle("is-unavailable", !voice.available);
 
     const radio = document.createElement("input");
     radio.type = "radio";
     radio.name = "voice";
     radio.value = voice.id;
-    radio.checked = index === 0;
+    radio.disabled = !voice.available;
+    radio.dataset.available = String(voice.available);
+    radio.dataset.provider = voice.provider;
+    radio.checked = voice.available && !firstAvailableSelected;
+    if (radio.checked) {
+      firstAvailableSelected = true;
+    }
 
     const copy = document.createElement("span");
     copy.className = "voice-copy";
+    const title = document.createElement("span");
+    title.className = "voice-title";
     const name = document.createElement("strong");
     name.textContent = voice.name;
+    title.append(name);
+    if (voice.provider === "azure") {
+      const provider = document.createElement("span");
+      provider.className = "voice-provider";
+      provider.textContent = "Azure";
+      title.append(provider);
+    }
     const meta = document.createElement("small");
     meta.textContent = `${voice.gender} · ${voice.description}`;
-    copy.append(name, meta);
+    copy.append(title, meta);
+    if (!voice.available && voice.unavailable_reason) {
+      const reason = document.createElement("small");
+      reason.className = "voice-unavailable-reason";
+      reason.textContent = voice.unavailable_reason;
+      copy.append(reason);
+    }
 
     const indicator = document.createElement("span");
     indicator.className = "radio-indicator";
@@ -231,8 +255,10 @@ function updateSubmitState() {
 }
 
 function updateControlLabels() {
+  const selectedVoice = elements.form.querySelector('input[name="voice"]:checked');
+  const pitchUnit = selectedVoice?.dataset.provider === "azure" ? "%" : "Hz";
   elements.rateValue.textContent = formatSigned(elements.rate.value, "%");
-  elements.pitchValue.textContent = formatSigned(elements.pitch.value, "Hz");
+  elements.pitchValue.textContent = formatSigned(elements.pitch.value, pitchUnit);
   elements.volumeValue.textContent = formatSigned(elements.volume.value, "%");
 }
 
@@ -246,7 +272,7 @@ function setBusy(busy) {
   elements.form.classList.toggle("is-busy", busy);
   elements.text.readOnly = busy;
   elements.form.querySelectorAll('input[type="radio"], input[type="range"]').forEach((control) => {
-    control.disabled = busy;
+    control.disabled = busy || control.dataset.available === "false";
   });
   elements.clearText.disabled = busy;
   elements.resetControls.disabled = busy;
@@ -281,7 +307,10 @@ async function readError(response) {
 
 elements.form.addEventListener("submit", createJob);
 elements.text.addEventListener("input", updateCharacterCount);
-elements.voiceList.addEventListener("change", updateSubmitState);
+elements.voiceList.addEventListener("change", () => {
+  updateSubmitState();
+  updateControlLabels();
+});
 [elements.rate, elements.pitch, elements.volume].forEach((control) => {
   control.addEventListener("input", updateControlLabels);
 });
