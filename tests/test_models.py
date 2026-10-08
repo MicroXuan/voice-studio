@@ -46,7 +46,9 @@ def test_controls_reject_out_of_range_values(field: str, value: int) -> None:
 def test_voice_catalog_contains_only_supported_featured_voices() -> None:
     voice_ids = [voice.id for voice in VOICES]
 
+    assert "zh-CN-YunjianNeural" in voice_ids
     assert "zh-CN-YunxiNeural" in voice_ids
+    assert "zh-CN-YunxiaNeural" in voice_ids
     assert "zh-CN-YunyangNeural" in voice_ids
     assert "zh-CN-XiaoxiaoNeural" in voice_ids
     assert "zh-CN-YunzeNeural" not in voice_ids

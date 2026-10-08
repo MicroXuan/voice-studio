@@ -26,7 +26,9 @@ async def test_get_voices_returns_curated_catalog(api_harness: ApiHarness) -> No
     assert response.status_code == 200
     ids = {voice["id"] for voice in response.json()}
     assert {
+        "zh-CN-YunjianNeural",
         "zh-CN-YunxiNeural",
+        "zh-CN-YunxiaNeural",
         "zh-CN-YunyangNeural",
         "zh-CN-XiaoxiaoNeural",
     } <= ids
