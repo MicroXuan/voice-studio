@@ -1,5 +1,6 @@
 import asyncio
-from datetime import timedelta
+import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -124,3 +125,24 @@ async def test_cleanup_does_not_delete_file_outside_output_dir(
 
     assert removed == 1
     assert external.exists()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_removes_expired_orphans_after_restart(
+    store: JobStore,
+) -> None:
+    orphan = store.output_dir / "3b2f7ad8-f49e-42d7-928d-faa777aa3b80.mp3"
+    partial = store.output_dir / "4c771f61-c97a-4c54-b223-bd226f6b9289.mp3.part"
+    unrelated = store.output_dir / "keep.mp3"
+    for path in (orphan, partial, unrelated):
+        path.write_bytes(b"audio")
+    old_time = datetime.now(UTC) - timedelta(seconds=61)
+    for path in (orphan, partial, unrelated):
+        os.utime(path, (old_time.timestamp(), old_time.timestamp()))
+
+    removed = await store.cleanup_expired(now=datetime.now(UTC))
+
+    assert removed == 2
+    assert not orphan.exists()
+    assert not partial.exists()
+    assert unrelated.exists()

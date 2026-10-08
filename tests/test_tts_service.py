@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -218,3 +219,37 @@ async def test_write_exception_becomes_audio_write_error(
         )
 
     assert not output.exists()
+
+
+@pytest.mark.asyncio
+async def test_cancellation_removes_partial_audio(tmp_path: Path) -> None:
+    stream_started = asyncio.Event()
+    never_release = asyncio.Event()
+
+    class BlockingCommunicate:
+        async def stream(self) -> AsyncIterator[dict[str, Any]]:
+            yield {"type": "audio", "data": b"partial"}
+            stream_started.set()
+            await never_release.wait()
+
+    service = EdgeTTSService(lambda *args, **kwargs: BlockingCommunicate())
+    output = tmp_path / "voice.mp3"
+    task = asyncio.create_task(
+        service.synthesize(
+            "测试",
+            "zh-CN-YunxiNeural",
+            0,
+            0,
+            0,
+            output,
+            lambda value: record_progress([], value),
+        )
+    )
+    await asyncio.wait_for(stream_started.wait(), timeout=1)
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert not output.exists()
+    assert not (tmp_path / "voice.mp3.part").exists()

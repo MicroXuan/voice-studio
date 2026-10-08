@@ -111,7 +111,18 @@ class JobStore:
                     if candidate.is_relative_to(root) and candidate.is_file():
                         candidate.unlink()
                 self._jobs.pop(record.id, None)
-            return len(expired)
+            removed = len(expired)
+            for candidate in self.output_dir.iterdir():
+                if not self._is_owned_audio_name(candidate.name):
+                    continue
+                resolved = candidate.resolve()
+                if not resolved.is_relative_to(root) or not resolved.is_file():
+                    continue
+                modified_at = datetime.fromtimestamp(resolved.stat().st_mtime, UTC)
+                if modified_at < cutoff:
+                    resolved.unlink()
+                    removed += 1
+            return removed
 
     def _require(self, job_id: UUID) -> JobRecord:
         try:
@@ -122,3 +133,17 @@ class JobStore:
     def _release(self, job_id: UUID) -> None:
         if self._active_job_id == job_id:
             self._active_job_id = None
+
+    @staticmethod
+    def _is_owned_audio_name(filename: str) -> bool:
+        if filename.endswith(".mp3.part"):
+            identifier = filename[: -len(".mp3.part")]
+        elif filename.endswith(".mp3"):
+            identifier = filename[: -len(".mp3")]
+        else:
+            return False
+        try:
+            UUID(identifier)
+        except ValueError:
+            return False
+        return True

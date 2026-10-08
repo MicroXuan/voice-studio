@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
@@ -64,6 +65,9 @@ class EdgeTTSService:
             if not audio_received or part_path.stat().st_size == 0:
                 raise EmptyAudioError("语音服务没有返回音频")
             part_path.replace(output_path)
+        except asyncio.CancelledError:
+            self._remove_partial(part_path)
+            raise
         except EmptyAudioError:
             self._remove_partial(part_path)
             raise
