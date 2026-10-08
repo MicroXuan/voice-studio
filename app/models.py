@@ -12,6 +12,9 @@ class VoiceOption(BaseModel):
     name: str
     gender: Literal["男声", "女声"]
     description: str
+    provider: Literal["edge", "azure"] = "edge"
+    available: bool = True
+    unavailable_reason: str | None = None
 
 
 class SynthesisRequest(BaseModel):

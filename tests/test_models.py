@@ -1,7 +1,7 @@
 import pytest
 
 from app.models import SynthesisRequest
-from app.voices import VOICES, get_voice
+from app.voices import VOICES, build_voice_catalog, get_voice
 
 
 def test_whitespace_text_is_rejected() -> None:
@@ -51,7 +51,29 @@ def test_voice_catalog_contains_only_supported_featured_voices() -> None:
     assert "zh-CN-YunxiaNeural" in voice_ids
     assert "zh-CN-YunyangNeural" in voice_ids
     assert "zh-CN-XiaoxiaoNeural" in voice_ids
-    assert "zh-CN-YunzeNeural" not in voice_ids
+    assert "zh-CN-YunzeNeural" in voice_ids
     assert len(voice_ids) == len(set(voice_ids))
     assert get_voice("zh-CN-XiaoxiaoNeural").gender == "女声"
     assert get_voice("zh-CN-UnknownNeural") is None
+
+
+def test_voice_catalog_includes_azure_yunze_with_runtime_availability() -> None:
+    unavailable_catalog = build_voice_catalog(azure_configured=False)
+    available_catalog = build_voice_catalog(azure_configured=True)
+
+    unavailable_yunze = get_voice("zh-CN-YunzeNeural", unavailable_catalog)
+    available_yunze = get_voice("zh-CN-YunzeNeural", available_catalog)
+
+    assert unavailable_yunze is not None
+    assert unavailable_yunze.provider == "azure"
+    assert unavailable_yunze.available is False
+    assert unavailable_yunze.unavailable_reason == "需配置 Azure Speech"
+    assert available_yunze is not None
+    assert available_yunze.provider == "azure"
+    assert available_yunze.available is True
+    assert available_yunze.unavailable_reason is None
+    assert all(
+        voice.provider == "edge" and voice.available
+        for voice in available_catalog
+        if voice.id != "zh-CN-YunzeNeural"
+    )
