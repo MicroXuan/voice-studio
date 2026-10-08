@@ -1,7 +1,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import aiohttp
 import edge_tts
@@ -20,6 +20,34 @@ class AudioWriteError(RuntimeError):
     """Raised when generated audio cannot be stored locally."""
 
 
+class TTSAuthenticationError(RuntimeError):
+    """Raised when remote speech credentials or region are invalid."""
+
+
+class TTSQuotaError(RuntimeError):
+    """Raised when remote speech quota or request limits are reached."""
+
+
+class TTSServiceError(RuntimeError):
+    """Raised when the remote speech service rejects a request."""
+
+
+ProgressCallback = Callable[[int, str], Awaitable[None]]
+
+
+class SpeechSynthesizer(Protocol):
+    async def synthesize(
+        self,
+        text: str,
+        voice: str,
+        rate: int,
+        pitch: int,
+        volume: int,
+        output_path: Path,
+        on_progress: ProgressCallback,
+    ) -> None: ...
+
+
 class EdgeTTSService:
     def __init__(
         self, communicate_factory: Callable[..., Any] = edge_tts.Communicate
@@ -34,7 +62,7 @@ class EdgeTTSService:
         pitch: int,
         volume: int,
         output_path: Path,
-        on_progress: Callable[[int], Awaitable[None]],
+        on_progress: ProgressCallback,
     ) -> None:
         part_path = output_path.with_suffix(f"{output_path.suffix}.part")
         spoken_chars = 0
@@ -60,7 +88,7 @@ class EdgeTTSService:
                         progress = min(95, int(spoken_chars / len(text) * 95))
                         if progress > last_progress:
                             last_progress = progress
-                            await on_progress(progress)
+                            await on_progress(progress, "正在生成语音")
 
             if not audio_received or part_path.stat().st_size == 0:
                 raise EmptyAudioError("语音服务没有返回音频")

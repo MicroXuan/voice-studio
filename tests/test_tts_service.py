@@ -39,7 +39,7 @@ class CapturingFactory:
         return FakeCommunicate(self.events, self.failure)
 
 
-async def record_progress(values: list[int], progress: int) -> None:
+async def record_progress(values: list[int], progress: int, message: str) -> None:
     values.append(progress)
 
 
@@ -55,7 +55,7 @@ async def test_formats_controls_with_explicit_sign(tmp_path: Path) -> None:
         pitch=12,
         volume=-8,
         output_path=tmp_path / "voice.mp3",
-        on_progress=lambda value: record_progress([], value),
+        on_progress=lambda value, message: record_progress([], value, message),
     )
 
     assert factory.calls == [
@@ -87,7 +87,7 @@ async def test_writes_audio_chunks_to_final_mp3(tmp_path: Path) -> None:
         0,
         0,
         output,
-        lambda value: record_progress([], value),
+        lambda value, message: record_progress([], value, message),
     )
 
     assert output.read_bytes() == b"firstsecond"
@@ -116,7 +116,7 @@ async def test_boundary_progress_is_monotonic_and_capped_at_95(
         0,
         0,
         tmp_path / "voice.mp3",
-        lambda value: record_progress(progress_values, value),
+        lambda value, message: record_progress(progress_values, value, message),
     )
 
     assert progress_values == [47, 71, 95]
@@ -144,7 +144,7 @@ async def test_sentence_boundary_updates_progress_for_current_edge_stream(
         0,
         0,
         tmp_path / "voice.mp3",
-        lambda value: record_progress(progress_values, value),
+        lambda value, message: record_progress(progress_values, value, message),
     )
 
     assert progress_values == [47, 95]
@@ -166,7 +166,7 @@ async def test_no_audio_raises_empty_audio_and_removes_partial_file(
             0,
             0,
             output,
-            lambda value: record_progress([], value),
+            lambda value, message: record_progress([], value, message),
         )
 
     assert not output.exists()
@@ -187,7 +187,7 @@ async def test_network_exception_becomes_tts_unavailable(tmp_path: Path) -> None
             0,
             0,
             output,
-            lambda value: record_progress([], value),
+            lambda value, message: record_progress([], value, message),
         )
 
     assert not output.exists()
@@ -215,7 +215,7 @@ async def test_write_exception_becomes_audio_write_error(
             0,
             0,
             output,
-            lambda value: record_progress([], value),
+            lambda value, message: record_progress([], value, message),
         )
 
     assert not output.exists()
@@ -242,7 +242,7 @@ async def test_cancellation_removes_partial_audio(tmp_path: Path) -> None:
             0,
             0,
             output,
-            lambda value: record_progress([], value),
+            lambda value, message: record_progress([], value, message),
         )
     )
     await asyncio.wait_for(stream_started.wait(), timeout=1)
