@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.job_store import ActiveJobError, JobRecord, JobStore
 from app.models import JobResponse, JobState, SynthesisRequest, VoiceOption
@@ -20,6 +21,7 @@ from app.voices import VOICES, get_voice
 
 
 logger = logging.getLogger(__name__)
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 def create_app(
@@ -45,6 +47,11 @@ def create_app(
     application.state.store = job_store
     application.state.tts_service = synthesizer
     application.state.background_tasks = background_tasks
+    application.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @application.get("/", include_in_schema=False)
+    async def index() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
 
     @application.get("/api/voices", response_model=list[VoiceOption])
     async def list_voices() -> tuple[VoiceOption, ...]:
