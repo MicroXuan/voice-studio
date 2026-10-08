@@ -43,12 +43,13 @@ def test_controls_reject_out_of_range_values(field: str, value: int) -> None:
         SynthesisRequest(**payload)
 
 
-def test_voice_catalog_contains_yunxi_yunze_and_female_voice() -> None:
+def test_voice_catalog_contains_only_supported_featured_voices() -> None:
     voice_ids = [voice.id for voice in VOICES]
 
     assert "zh-CN-YunxiNeural" in voice_ids
-    assert "zh-CN-YunzeNeural" in voice_ids
+    assert "zh-CN-YunyangNeural" in voice_ids
     assert "zh-CN-XiaoxiaoNeural" in voice_ids
+    assert "zh-CN-YunzeNeural" not in voice_ids
     assert len(voice_ids) == len(set(voice_ids))
     assert get_voice("zh-CN-XiaoxiaoNeural").gender == "女声"
     assert get_voice("zh-CN-UnknownNeural") is None

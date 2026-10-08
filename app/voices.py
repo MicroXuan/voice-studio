@@ -9,10 +9,10 @@ VOICES: tuple[VoiceOption, ...] = (
         description="自然清晰，适合知识讲解与日常旁白",
     ),
     VoiceOption(
-        id="zh-CN-YunzeNeural",
-        name="云泽",
+        id="zh-CN-YunyangNeural",
+        name="云扬",
         gender="男声",
-        description="沉稳有力，适合故事、纪录片与长文",
+        description="专业可靠，适合新闻、说明与正式旁白",
     ),
     VoiceOption(
         id="zh-CN-XiaoxiaoNeural",

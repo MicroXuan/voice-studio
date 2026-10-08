@@ -5,6 +5,21 @@ import pytest
 from tests.conftest import ApiHarness
 
 
+def contrast_ratio(foreground: str, background: str) -> float:
+    def luminance(color: str) -> float:
+        channels = [int(color[index : index + 2], 16) / 255 for index in (1, 3, 5)]
+        linear = [
+            channel / 12.92
+            if channel <= 0.04045
+            else ((channel + 0.055) / 1.055) ** 2.4
+            for channel in channels
+        ]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    first, second = luminance(foreground), luminance(background)
+    return (max(first, second) + 0.05) / (min(first, second) + 0.05)
+
+
 @pytest.mark.asyncio
 async def test_root_serves_chinese_html_and_local_assets(
     api_harness: ApiHarness,
@@ -156,3 +171,31 @@ async def test_waveform_is_not_the_only_progress_signal(
     assert 'elements.progressBar.setAttribute("aria-valuenow", String(progress))' in script
     assert "elements.progressPercent.textContent = `${progress}%`" in script
     assert 'style.setProperty("--progress", `${progress}%`)' in script
+
+
+@pytest.mark.asyncio
+async def test_accessibility_audit_has_skip_link_touch_optimization_and_contrast(
+    api_harness: ApiHarness,
+) -> None:
+    html = (await api_harness.client.get("/")).text
+    css = (await api_harness.client.get("/static/styles.css")).text
+
+    assert 'class="skip-link" href="#main-content"' in html
+    assert '<main class="page-shell" id="main-content"' in html
+    assert "touch-action: manipulation" in css
+    assert "button:active" in css
+
+    paper = re.search(r"--paper:\s*(#[0-9A-Fa-f]{6})", css).group(1)
+    muted = re.search(r"--muted:\s*(#[0-9A-Fa-f]{6})", css).group(1)
+    assert contrast_ratio(muted, paper) >= 4.5
+
+
+@pytest.mark.asyncio
+async def test_mobile_text_action_prevents_label_wrap(
+    api_harness: ApiHarness,
+) -> None:
+    css = (await api_harness.client.get("/static/styles.css")).text
+    text_action_rule = re.search(r"\.text-action\s*\{([^}]+)\}", css).group(1)
+
+    assert "white-space: nowrap" in text_action_rule
+    assert "flex-shrink: 0" in text_action_rule

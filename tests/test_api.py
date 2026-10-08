@@ -27,7 +27,7 @@ async def test_get_voices_returns_curated_catalog(api_harness: ApiHarness) -> No
     ids = {voice["id"] for voice in response.json()}
     assert {
         "zh-CN-YunxiNeural",
-        "zh-CN-YunzeNeural",
+        "zh-CN-YunyangNeural",
         "zh-CN-XiaoxiaoNeural",
     } <= ids
 
@@ -65,7 +65,7 @@ async def test_second_active_job_returns_409(api_harness: ApiHarness) -> None:
 
     second = await api_harness.client.post(
         "/api/jobs",
-        json={"text": "第二条", "voice": "zh-CN-YunzeNeural"},
+        json={"text": "第二条", "voice": "zh-CN-YunyangNeural"},
     )
 
     assert first.status_code == 202

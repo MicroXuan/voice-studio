@@ -54,7 +54,7 @@ class EdgeTTSService:
                     if event["type"] == "audio":
                         audio_file.write(event["data"])
                         audio_received = True
-                    elif event["type"] == "WordBoundary":
+                    elif event["type"] in {"WordBoundary", "SentenceBoundary"}:
                         spoken_chars += len(event.get("text", ""))
                         progress = min(95, int(spoken_chars / len(text) * 95))
                         if progress > last_progress:

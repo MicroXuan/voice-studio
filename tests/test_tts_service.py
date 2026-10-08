@@ -123,6 +123,33 @@ async def test_boundary_progress_is_monotonic_and_capped_at_95(
 
 
 @pytest.mark.asyncio
+async def test_sentence_boundary_updates_progress_for_current_edge_stream(
+    tmp_path: Path,
+) -> None:
+    factory = CapturingFactory(
+        [
+            {"type": "SentenceBoundary", "text": "第一句。"},
+            {"type": "SentenceBoundary", "text": "第二句。"},
+            {"type": "audio", "data": b"mp3"},
+        ]
+    )
+    service = EdgeTTSService(factory)
+    progress_values: list[int] = []
+
+    await service.synthesize(
+        "第一句。第二句。",
+        "zh-CN-YunxiNeural",
+        0,
+        0,
+        0,
+        tmp_path / "voice.mp3",
+        lambda value: record_progress(progress_values, value),
+    )
+
+    assert progress_values == [47, 95]
+
+
+@pytest.mark.asyncio
 async def test_no_audio_raises_empty_audio_and_removes_partial_file(
     tmp_path: Path,
 ) -> None:
