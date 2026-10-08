@@ -18,12 +18,8 @@ def test_config_requires_both_key_and_region(
     region: str | None,
     expected: bool,
 ) -> None:
-    monkeypatch.delenv("AZURE_SPEECH_KEY", raising=False)
-    monkeypatch.delenv("AZURE_SPEECH_REGION", raising=False)
-    if key is not None:
-        monkeypatch.setenv("AZURE_SPEECH_KEY", key)
-    if region is not None:
-        monkeypatch.setenv("AZURE_SPEECH_REGION", region)
+    monkeypatch.setenv("AZURE_SPEECH_KEY", key or "")
+    monkeypatch.setenv("AZURE_SPEECH_REGION", region or "")
 
     assert AzureSpeechConfig.from_env().configured is expected
 
@@ -37,3 +33,10 @@ def test_config_trims_environment_values(monkeypatch: pytest.MonkeyPatch) -> Non
     assert config.key == "test-key"
     assert config.region == "eastasia"
     assert config.configured is True
+
+
+def test_config_repr_hides_key() -> None:
+    config = AzureSpeechConfig(key="fake-secret-key", region="eastasia")
+
+    assert "fake-secret-key" not in repr(config)
+    assert "eastasia" in repr(config)

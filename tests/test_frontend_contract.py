@@ -230,3 +230,12 @@ async def test_busy_state_does_not_reenable_unavailable_voice_and_pitch_unit_mat
     css = (await api_harness.client.get("/static/styles.css")).text
     assert ".voice-choice.is-unavailable" in css
     assert ".voice-provider" in css
+
+
+@pytest.mark.asyncio
+async def test_footer_names_both_voice_providers(api_harness: ApiHarness) -> None:
+    html = (await api_harness.client.get("/")).text
+    footer = html.split("<footer", 1)[1]
+
+    assert "Microsoft Edge" in footer
+    assert "Azure Speech" in footer

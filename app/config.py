@@ -1,12 +1,12 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
 
 @dataclass(frozen=True)
 class AzureSpeechConfig:
-    key: str | None
+    key: str | None = field(repr=False)
     region: str | None
 
     @classmethod
