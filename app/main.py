@@ -9,15 +9,22 @@ from fastapi import FastAPI, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.azure_tts_service import AzureTTSService
+from app.config import AzureSpeechConfig
 from app.job_store import ActiveJobError, JobRecord, JobStore
 from app.models import JobResponse, JobState, SynthesisRequest, VoiceOption
+from app.tts_router import TTSRouter
 from app.tts_service import (
     AudioWriteError,
     EdgeTTSService,
     EmptyAudioError,
+    SpeechSynthesizer,
+    TTSAuthenticationError,
+    TTSQuotaError,
+    TTSServiceError,
     TTSUnavailableError,
 )
-from app.voices import VOICES, get_voice
+from app.voices import build_voice_catalog, get_voice
 
 
 logger = logging.getLogger(__name__)
@@ -26,12 +33,20 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 def create_app(
     store: JobStore | None = None,
-    tts_service: EdgeTTSService | None = None,
+    tts_service: SpeechSynthesizer | None = None,
+    azure_config: AzureSpeechConfig | None = None,
+    catalog: tuple[VoiceOption, ...] | None = None,
 ) -> FastAPI:
+    config = azure_config or AzureSpeechConfig.from_env()
+    voice_catalog = catalog or build_voice_catalog(config.configured)
     job_store = store or JobStore(
         Path(tempfile.gettempdir()) / "voice-studio-audio"
     )
-    synthesizer = tts_service or EdgeTTSService()
+    synthesizer = tts_service or TTSRouter(
+        voice_catalog,
+        EdgeTTSService(),
+        AzureTTSService(config) if config.configured else None,
+    )
     background_tasks: set[asyncio.Task[None]] = set()
 
     @asynccontextmanager
@@ -46,6 +61,7 @@ def create_app(
     application = FastAPI(title="声屿 Voice Studio", lifespan=lifespan)
     application.state.store = job_store
     application.state.tts_service = synthesizer
+    application.state.voice_catalog = voice_catalog
     application.state.background_tasks = background_tasks
     application.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -55,7 +71,7 @@ def create_app(
 
     @application.get("/api/voices", response_model=list[VoiceOption])
     async def list_voices() -> tuple[VoiceOption, ...]:
-        return VOICES
+        return voice_catalog
 
     @application.post(
         "/api/jobs",
@@ -64,8 +80,14 @@ def create_app(
     )
     async def create_job(request: SynthesisRequest, response: Response) -> JobResponse:
         await job_store.cleanup_expired()
-        if get_voice(request.voice) is None:
+        voice = get_voice(request.voice, voice_catalog)
+        if voice is None:
             raise HTTPException(status_code=422, detail="请选择有效的声音")
+        if not voice.available:
+            raise HTTPException(
+                status_code=422,
+                detail=voice.unavailable_reason or "声音当前不可用",
+            )
         try:
             record = await job_store.create()
         except ActiveJobError as exc:
@@ -114,15 +136,15 @@ def create_app(
 
 async def _run_job(
     store: JobStore,
-    synthesizer: EdgeTTSService,
+    synthesizer: SpeechSynthesizer,
     job_id: UUID,
     request: SynthesisRequest,
 ) -> None:
     try:
         await store.start(job_id)
 
-        async def report_progress(progress: int) -> None:
-            await store.update_progress(job_id, progress, "正在生成语音")
+        async def report_progress(progress: int, message: str) -> None:
+            await store.update_progress(job_id, progress, message)
 
         output_path = store.output_dir / f"{job_id}.mp3"
         await synthesizer.synthesize(
@@ -138,14 +160,26 @@ async def _run_job(
     except asyncio.CancelledError:
         await store.fail(job_id, "生成任务已取消，请重新生成")
         raise
+    except TTSAuthenticationError:
+        logger.warning("Azure Speech authentication failed")
+        await store.fail(job_id, "Azure Speech 配置无效，请检查 Key 和 Region")
+    except TTSQuotaError:
+        logger.warning("Azure Speech quota or request limit reached")
+        await store.fail(
+            job_id,
+            "Azure 免费额度可能已用完或请求过于频繁，请稍后重试",
+        )
+    except TTSServiceError:
+        logger.warning("Azure Speech rejected the synthesis request")
+        await store.fail(job_id, "Azure 语音服务暂时不可用，请稍后重试")
     except TTSUnavailableError:
-        logger.exception("Edge TTS service is unavailable")
+        logger.warning("Speech service is unavailable")
         await store.fail(job_id, "无法连接微软语音服务，请检查网络后重试")
     except EmptyAudioError:
-        logger.exception("Edge TTS returned no audio")
+        logger.warning("Speech service returned no audio")
         await store.fail(job_id, "语音服务没有返回有效音频，请稍后重试")
     except AudioWriteError:
-        logger.exception("Could not write generated audio")
+        logger.warning("Could not write generated audio")
         await store.fail(job_id, "无法保存音频，请检查磁盘空间或临时目录权限")
     except ValueError:
         logger.exception("Generated audio file was empty")

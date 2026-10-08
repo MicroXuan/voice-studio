@@ -31,7 +31,101 @@ async def test_get_voices_returns_curated_catalog(api_harness: ApiHarness) -> No
         "zh-CN-YunxiaNeural",
         "zh-CN-YunyangNeural",
         "zh-CN-XiaoxiaoNeural",
+        "zh-CN-YunzeNeural",
     } <= ids
+    yunze = next(
+        voice for voice in response.json() if voice["id"] == "zh-CN-YunzeNeural"
+    )
+    assert yunze["provider"] == "azure"
+    assert yunze["available"] is False
+    assert yunze["unavailable_reason"] == "需配置 Azure Speech"
+    assert set(yunze) == {
+        "id",
+        "name",
+        "gender",
+        "description",
+        "provider",
+        "available",
+        "unavailable_reason",
+    }
+
+
+@pytest.mark.asyncio
+async def test_create_job_rejects_unavailable_yunze(
+    api_harness: ApiHarness,
+) -> None:
+    response = await api_harness.client.post(
+        "/api/jobs", json={"text": "测试", "voice": "zh-CN-YunzeNeural"}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "需配置 Azure Speech"
+
+
+@pytest.mark.asyncio
+async def test_configured_yunze_can_create_job(
+    configured_api_harness: ApiHarness,
+) -> None:
+    response = await configured_api_harness.client.post(
+        "/api/jobs", json={"text": "测试", "voice": "zh-CN-YunzeNeural"}
+    )
+
+    assert response.status_code == 202
+    assert response.json()["state"] == "queued"
+
+
+@pytest.mark.asyncio
+async def test_provider_progress_message_reaches_job_polling(
+    configured_api_harness: ApiHarness,
+) -> None:
+    configured_api_harness.synthesizer.progress_message = "正在连接 Azure"
+    response = await configured_api_harness.client.post(
+        "/api/jobs", json={"text": "测试", "voice": "zh-CN-YunzeNeural"}
+    )
+    await asyncio.wait_for(
+        configured_api_harness.synthesizer.started.wait(), timeout=1
+    )
+
+    job = await configured_api_harness.client.get(
+        f"/api/jobs/{response.json()['id']}"
+    )
+
+    assert job.json()["progress"] == 42
+    assert job.json()["message"] == "正在连接 Azure"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mode", "expected_error"),
+    [
+        ("authentication", "Azure Speech 配置无效，请检查 Key 和 Region"),
+        ("quota", "Azure 免费额度可能已用完或请求过于频繁，请稍后重试"),
+        ("service", "Azure 语音服务暂时不可用，请稍后重试"),
+        ("failure", "无法连接微软语音服务，请检查网络后重试"),
+        ("empty_error", "语音服务没有返回有效音频，请稍后重试"),
+        ("write_error", "无法保存音频，请检查磁盘空间或临时目录权限"),
+    ],
+)
+async def test_provider_errors_are_public_and_release_active_job(
+    api_harness: ApiHarness, mode: str, expected_error: str
+) -> None:
+    api_harness.synthesizer.mode = mode
+    api_harness.synthesizer.release.set()
+    created = await api_harness.client.post(
+        "/api/jobs", json={"text": "失败测试", "voice": "zh-CN-YunxiNeural"}
+    )
+    failed = await wait_for_state(
+        api_harness, created.json()["id"], JobState.FAILED
+    )
+
+    assert failed["error"] == expected_error
+    assert "private" not in failed["error"]
+
+    api_harness.synthesizer.mode = "success"
+    next_job = await api_harness.client.post(
+        "/api/jobs", json={"text": "下一条", "voice": "zh-CN-YunxiNeural"}
+    )
+    assert next_job.status_code == 202
 
 
 @pytest.mark.asyncio
