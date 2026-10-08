@@ -93,3 +93,66 @@ async def test_html_has_no_emoji_icons_or_placeholder_only_inputs(
     assert not re.search(r"[\U0001F300-\U0001FAFF]", html)
     assert " placeholder=" not in html
     assert "<svg" in html
+
+
+@pytest.mark.asyncio
+async def test_script_is_deferred_and_uses_required_api_routes(
+    api_harness: ApiHarness,
+) -> None:
+    html = (await api_harness.client.get("/")).text
+    assert '<script src="/static/app.js" defer></script>' in html
+
+    script_response = await api_harness.client.get("/static/app.js")
+    assert script_response.status_code == 200
+    script = script_response.text
+    assert 'fetch("/api/voices")' in script
+    assert 'fetch("/api/jobs"' in script
+    assert "fetch(`/api/jobs/${jobId}`)" in script
+
+
+@pytest.mark.asyncio
+async def test_ui_prevents_empty_submission_and_preserves_text_on_error(
+    api_harness: ApiHarness,
+) -> None:
+    script = (await api_harness.client.get("/static/app.js")).text
+
+    assert "function serializeRequest()" in script
+    assert "elements.text.value.trim()" in script
+    assert "if (!payload.text)" in script
+    error_function = script.split("function renderError", 1)[1].split(
+        "function ", 1
+    )[0]
+    assert "elements.text.value =" not in error_function
+
+
+@pytest.mark.asyncio
+async def test_polling_has_retry_path_for_transient_fetch_failure(
+    api_harness: ApiHarness,
+) -> None:
+    script = (await api_harness.client.get("/static/app.js")).text
+
+    assert "const POLL_INTERVAL = 800" in script
+    assert "继续查询" in script
+    assert "pollJob(activeJobId)" in script
+
+
+@pytest.mark.asyncio
+async def test_completed_state_sets_player_and_download_urls(
+    api_harness: ApiHarness,
+) -> None:
+    script = (await api_harness.client.get("/static/app.js")).text
+
+    assert "elements.audioPlayer.src = job.audio_url" in script
+    assert "elements.downloadLink.href = `${job.audio_url}?download=true`" in script
+    assert "elements.audioResult.hidden = false" in script
+
+
+@pytest.mark.asyncio
+async def test_waveform_is_not_the_only_progress_signal(
+    api_harness: ApiHarness,
+) -> None:
+    script = (await api_harness.client.get("/static/app.js")).text
+
+    assert 'elements.progressBar.setAttribute("aria-valuenow", String(progress))' in script
+    assert "elements.progressPercent.textContent = `${progress}%`" in script
+    assert 'style.setProperty("--progress", `${progress}%`)' in script
